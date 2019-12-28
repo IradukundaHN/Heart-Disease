@@ -1,0 +1,101 @@
+---
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r}
+#import the packages
+library(kknn)
+library(tidyverse)
+library(readxl)
+library(caret)
+
+#load the data from working directory
+Heart = read_excel(path = "/Heart Disease.xlsx")
+
+
+## Classification with *knn*
+
+# Recode the HeartDisease as a factor
+Heart$HeartDisease = factor(Heart$HeartDisease,
+                            levels = c("Yes","No"),
+                            labels = c("Yes","No"))
+# Let's try k = 8
+KNNHeart = kknn(HeartDisease ~ ChestPain + Age, train = Heart, test = Heart, k = 8)
+
+# Add predicted values to our dataset
+Heart = Heart %>% mutate(HeartDiseaseKNN = KNNHeart$fitted.values)
+
+# Let's take a look at the result
+Heart %>% select(HeartDisease, HeartDiseaseKNN)
+
+```
+As the model performs classification, the first step in the analysis is to recode the HeartDisease variable into a factor variable. 
+
+```{r}
+Heart %>% group_by(HeartDisease,HeartDiseaseKNN) %>% summarise(Patients = n())
+```
+The function above shows how to check the accuracy of the model. The knn model predicted 236 out of 297 observations correctly, since we see 32 patients and 29 patients were labeled differently.
+
+The k observation chosen above was k=8. What if we don't know what values of k to choose? Refer to the code below:
+```{r}
+# Optimal k
+set.seed(12745) # This sets a start value for generating random numbers
+
+KNNHeartOptimal = train.kknn(HeartDisease ~ ChestPain + Age, 
+                             data = Heart,
+                             kmax = 20) # max k we are interested in trying
+
+# Now we can view the results with the summary function
+summary(KNNHeartOptimal)
+
+```
+
+If we do not know what value of k to choose, the train.kknn function will choose an optimal value of k for us using cross validation.
+The output suggests that k=6 would be the best model for our data. 
+To fit this model, one would follow the same steps as above, replace k=8 with k=6
+
+
+```{r}
+## Logistic Regression
+
+# The I() function creates a logical vector that is TRUE when HeartDisease is "Yes"
+# and FALSE otherwise
+Heart = Heart %>% mutate(HeartDisease = I(HeartDisease == "Yes") %>% as.numeric())
+
+# Let's predict HeartDisease with the Age variable
+HeartLogit = glm(HeartDisease ~ Age, # same as in lm()
+                 data = Heart,
+                 family = "binomial") # for logistic, this is always set to "binomial"
+
+summary(HeartLogit)
+
+```
+
+The first step in performing a logistic regression is to recode your response variable to numeric value equal 1 for the event of interest and 0 otherwise using the mutate function.
+In this case, we will be predicting whether a patient will develop heart disease based on Age.
+We must recode the HeartDisease variable in the Heart dataset to be equal to 1 if HeartDisease is “Yes” and 0 otherwise.
+The glm() function in R fits generalized linear model, which includes logistic linear regression, and family= “binomial” runs a logistic linear regression.
+
+
+```{r}
+
+## Logistic Regression with Multiple Predictors
+
+Heart = Heart %>% mutate(HeartDisease = I(HeartDisease == "Yes") %>% as.numeric())
+
+# Let's predict HeartDisease with the ChestPain, Sex, and Age variables
+HeartLogitMultiple = glm(HeartDisease ~ ChestPain + Sex + Age,
+                         data = Heart,
+                         family = "binomial")
+
+# Summary of results
+summary(HeartLogitMultiple)
+```
+
+The interpretation of the output above, 
+if Gender = 1 (Male), then the odds of developing heart disease are greater. To determine
+how much greater, we calculate e^(1.70898) = 5.52. 
+This means that patients with Gender=1(Male) have an odds of developing heart disease that is 5.52 times greater than the odds of heart disease for patients with Gender=0(Female).
+
